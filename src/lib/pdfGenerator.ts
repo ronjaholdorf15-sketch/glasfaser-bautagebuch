@@ -18,12 +18,37 @@ function setColor(doc: jsPDF, rgb: readonly [number, number, number]) {
   doc.setTextColor(rgb[0], rgb[1], rgb[2]);
 }
 
-function fileToDataUrl(file: File): Promise<string> {
+const MAX_IMG_PX = 1800; // resize to max 1800px on longest edge before embedding
+
+/**
+ * Converts any image file (incl. HEIC from iPhone) to a JPEG data URL,
+ * resizes to MAX_IMG_PX, and corrects EXIF rotation via the browser canvas.
+ */
+function fileToJpegDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result as string);
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
+    const objectUrl = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      try {
+        const scale = Math.min(1, MAX_IMG_PX / Math.max(img.naturalWidth, img.naturalHeight));
+        const w = Math.round(img.naturalWidth * scale);
+        const h = Math.round(img.naturalHeight * scale);
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d")!;
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", 0.85));
+      } catch (e) {
+        reject(e);
+      }
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error(`Bild konnte nicht geladen werden: ${file.name}`));
+    };
+    img.src = objectUrl;
   });
 }
 
@@ -186,32 +211,42 @@ export async function generatePDF(entry: EntryData, images: File[]): Promise<Blo
     const imgH = 65;
     let col = 0;
 
-    for (const img of images) {
+    for (let imgIdx = 0; imgIdx < images.length; imgIdx++) {
+      const img = images[imgIdx];
+      let dataUrl: string;
+
       try {
-        const dataUrl = await fileToDataUrl(img);
+        dataUrl = await fileToJpegDataUrl(img);
+      } catch (_) {
+        // Image could not be loaded — draw a grey placeholder with filename
         const imgX = col === 0 ? margin : margin + imgW + 5;
-
-        // Check page break
-        if (y + imgH > 275) {
-          doc.addPage();
-          y = 20;
-          col = 0;
-        }
-
-        doc.addImage(dataUrl, imgX, y, imgW, imgH, undefined, "FAST");
-
-        // Caption
+        if (y + imgH > 275) { doc.addPage(); y = 20; col = 0; }
+        doc.setFillColor(230, 230, 230);
+        doc.rect(imgX, y, imgW, imgH, "F");
         doc.setFont("helvetica", "normal");
         doc.setFontSize(7);
-        doc.setTextColor(120, 120, 120);
-        doc.text(`Foto ${images.indexOf(img) + 1}`, imgX, y + imgH + 4);
-
+        doc.setTextColor(150, 150, 150);
+        doc.text("Bild nicht darstellbar", imgX + imgW / 2, y + imgH / 2, { align: "center" });
+        doc.text(img.name, imgX + imgW / 2, y + imgH / 2 + 5, { align: "center" });
+        doc.text(`Foto ${imgIdx + 1}`, imgX, y + imgH + 4);
         col++;
-        if (col === 2) {
-          col = 0;
-          y += imgH + 10;
-        }
-      } catch (_) {}
+        if (col === 2) { col = 0; y += imgH + 10; }
+        continue;
+      }
+
+      const imgX = col === 0 ? margin : margin + imgW + 5;
+      if (y + imgH > 275) { doc.addPage(); y = 20; col = 0; }
+
+      doc.addImage(dataUrl, "JPEG", imgX, y, imgW, imgH, undefined, "MEDIUM");
+
+      // Caption
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7);
+      doc.setTextColor(120, 120, 120);
+      doc.text(`Foto ${imgIdx + 1}  ·  ${img.name}`, imgX, y + imgH + 4);
+
+      col++;
+      if (col === 2) { col = 0; y += imgH + 10; }
     }
 
     if (col === 1) y += imgH + 10;
