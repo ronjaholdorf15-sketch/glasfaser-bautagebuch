@@ -93,8 +93,9 @@ export default function BautagebuchForm({
       form.append("entry", JSON.stringify({
         ...entryData,
         material: material.map((m) => ({
-          name: m.position.beschreibung,
+          positionNr: m.position.nr,
           artikelNr: m.position.artikelNr,
+          beschreibung: m.position.beschreibung,
           einheit: m.position.einheit,
           menge: m.menge,
         })),

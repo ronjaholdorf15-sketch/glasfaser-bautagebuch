@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { XMLParser } from "fast-xml-parser";
+import { prisma } from "@/lib/prisma";
 
 const NC_BASE = (process.env.NEXTCLOUD_URL || "").replace(/\/$/, "");
 const NC_ORIGIN = (process.env.NEXTCLOUD_ORIGIN || "").replace(/\/$/, "");
@@ -142,45 +143,39 @@ export async function POST(request: Request) {
       const entryFolder = `${folderBase}/Bautagebuch_${ts}`;
       await ensureFolder(entryFolder, username, password);
 
+      // Save entry to database
       if (entryJson) {
-        await putFile(
-          `${entryFolder}/eintrag.json`,
-          username,
-          password,
-          new Uint8Array(Buffer.from(entryJson, "utf8")),
-          "application/json"
-        );
         try {
           const data = JSON.parse(entryJson) as {
             datum: string;
             projekt: string;
             arbeitsschritt: string;
-            bemerkung: string;
-            material: { name: string; menge: number; einheit: string }[];
+            bemerkung?: string;
+            material: { positionNr: number; artikelNr: string; beschreibung: string; einheit: string; menge: number }[];
             benutzer: string;
           };
-          const lines = [
-            `Datum:          ${data.datum}`,
-            `Projekt:        ${data.projekt}`,
-            `Arbeitsschritt: ${data.arbeitsschritt}`,
-            "",
-            "Bemerkung:",
-            data.bemerkung || "(keine)",
-            "",
-            "Materialliste:",
-            ...(data.material || []).map((m) => `  - ${m.name}: ${m.menge} ${m.einheit}`),
-            "",
-            `Erstellt von: ${data.benutzer}`,
-            `Erstellt am:  ${new Date().toLocaleString("de-DE")}`,
-          ];
-          await putFile(
-            `${entryFolder}/eintrag.txt`,
-            username,
-            password,
-            new Uint8Array(Buffer.from(lines.join("\n"), "utf8")),
-            "text/plain; charset=utf-8"
-          );
-        } catch (_) {}
+          await prisma.eintrag.create({
+            data: {
+              datum: data.datum,
+              projekt: data.projekt,
+              projektHref: folderHref,
+              arbeitsschritt: data.arbeitsschritt,
+              bemerkung: data.bemerkung || "",
+              benutzer: data.benutzer,
+              material: {
+                create: (data.material || []).map((m) => ({
+                  positionNr: m.positionNr,
+                  artikelNr: m.artikelNr,
+                  beschreibung: m.beschreibung,
+                  einheit: m.einheit,
+                  menge: m.menge,
+                })),
+              },
+            },
+          });
+        } catch (dbErr) {
+          console.error("DB save error:", dbErr);
+        }
       }
 
       // Upload PDF
