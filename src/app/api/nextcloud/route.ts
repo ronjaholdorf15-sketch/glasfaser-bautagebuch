@@ -31,7 +31,7 @@ async function putFile(
   url: string,
   username: string,
   password: string,
-  body: Buffer,
+  body: Uint8Array,
   contentType = "application/octet-stream"
 ) {
   const res = await fetch(url, {
@@ -147,7 +147,7 @@ export async function POST(request: Request) {
           `${entryFolder}/eintrag.json`,
           username,
           password,
-          Buffer.from(entryJson, "utf8"),
+          new Uint8Array(Buffer.from(entryJson, "utf8")),
           "application/json"
         );
         try {
@@ -177,12 +177,20 @@ export async function POST(request: Request) {
             `${entryFolder}/eintrag.txt`,
             username,
             password,
-            Buffer.from(lines.join("\n"), "utf8"),
+            new Uint8Array(Buffer.from(lines.join("\n"), "utf8")),
             "text/plain; charset=utf-8"
           );
         } catch (_) {}
       }
 
+      // Upload PDF
+      const pdfFile = form.get("pdf") as File | null;
+      if (pdfFile && typeof pdfFile !== "string") {
+        const buf = Buffer.from(await pdfFile.arrayBuffer());
+        await putFile(`${entryFolder}/${pdfFile.name}`, username, password, new Uint8Array(buf), "application/pdf");
+      }
+
+      // Upload images
       const images = form.getAll("images");
       let idx = 1;
       for (const img of images) {
@@ -190,7 +198,7 @@ export async function POST(request: Request) {
         const file = img as File;
         const buf = Buffer.from(await file.arrayBuffer());
         const ext = file.name?.split(".").pop() || "jpg";
-        await putFile(`${entryFolder}/bild_${String(idx).padStart(2, "0")}.${ext}`, username, password, buf);
+        await putFile(`${entryFolder}/bild_${String(idx).padStart(2, "0")}.${ext}`, username, password, new Uint8Array(buf));
         idx++;
       }
 
