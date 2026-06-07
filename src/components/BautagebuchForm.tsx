@@ -17,7 +17,6 @@ const ARBEITSSCHRITTE = [
 ];
 
 type Folder = { name: string; href: string };
-
 type Props = {
   username: string;
   storedCreds: { username: string; password: string };
@@ -28,9 +27,15 @@ type Props = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 
-export default function BautagebuchForm({
-  username, storedCreds, folders, onFoldersReload, foldersLoading,
-}: Props) {
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: "#38B7CA" }}>
+      {children}
+    </p>
+  );
+}
+
+export default function BautagebuchForm({ username, storedCreds, folders, onFoldersReload, foldersLoading }: Props) {
   const [datum, setDatum] = useState(today());
   const [projekt, setProjekt] = useState("");
   const [projektName, setProjektName] = useState("");
@@ -51,32 +56,24 @@ export default function BautagebuchForm({
   }, [images]);
 
   const reset = () => {
-    setDatum(today());
-    setProjekt(""); setProjektName("");
-    setArbeitsschritt(""); setBemerkung("");
-    setMaterial([]); setImages([]);
+    setDatum(today()); setProjekt(""); setProjektName("");
+    setArbeitsschritt(""); setBemerkung(""); setMaterial([]); setImages([]);
   };
 
+  const inputCls = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm bg-white placeholder-gray-400 transition";
+
   const save = async () => {
-    if (!projekt) return setError("Bitte ein Projekt (Ordner) wählen.");
+    if (!projekt) return setError("Bitte ein Projekt wählen.");
     if (!arbeitsschritt) return setError("Bitte einen Arbeitsschritt wählen.");
-
-    setSaving(true);
-    setError("");
-    setSuccess("");
-
+    setSaving(true); setError(""); setSuccess("");
     try {
       const entryData = {
-        datum,
-        projekt: projektName,
-        arbeitsschritt,
-        bemerkung,
+        datum, projekt: projektName, arbeitsschritt, bemerkung,
         material,
         benutzer: username,
         erstelltAm: new Date().toISOString(),
       };
 
-      // Generate PDF client-side
       const pdfBlob = await generatePDF(entryData, images);
       const pdfFile = new File(
         [pdfBlob],
@@ -84,12 +81,10 @@ export default function BautagebuchForm({
         { type: "application/pdf" }
       );
 
-      // Build multipart form
       const form = new FormData();
       form.append("username", storedCreds.username);
       form.append("password", storedCreds.password);
       form.append("folder", projekt);
-      // JSON for machine-readable aggregation (material mapped to flat format)
       form.append("entry", JSON.stringify({
         ...entryData,
         material: material.map((m) => ({
@@ -107,34 +102,36 @@ export default function BautagebuchForm({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
 
-      setSuccess(`Gespeichert & PDF hochgeladen in „${projektName}"`);
+      setSuccess(`Eintrag gespeichert & PDF hochgeladen in „${projektName}"`);
       reset();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Upload fehlgeschlagen");
-    } finally {
-      setSaving(false);
-    }
+    } finally { setSaving(false); }
   };
 
   return (
-    <div className="bg-white rounded-2xl shadow p-6 space-y-6">
+    <div className="space-y-4">
 
-      {/* Datum + Projekt */}
+      {/* Top row: Datum + Projekt */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-[#163E73] mb-1.5">Datum</label>
+
+        {/* Datum */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <SectionLabel>Datum</SectionLabel>
           <input
             type="date"
-            className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3BBBCE]"
+            className={inputCls}
             value={datum}
             onChange={(e) => setDatum(e.target.value)}
           />
         </div>
-        <div>
-          <label className="block text-sm font-medium text-[#163E73] mb-1.5">Projekt</label>
+
+        {/* Projekt */}
+        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+          <SectionLabel>Projekt / Nextcloud-Ordner</SectionLabel>
           <div className="flex gap-2">
             <select
-              className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3BBBCE]"
+              className={`flex-1 ${inputCls}`}
               value={projekt}
               onChange={(e) => {
                 setProjekt(e.target.value);
@@ -146,8 +143,8 @@ export default function BautagebuchForm({
             </select>
             <button
               onClick={onFoldersReload}
-              title="Ordner neu laden"
-              className="px-3 rounded-xl border border-gray-200 text-gray-400 hover:border-[#3BBBCE] hover:text-[#3BBBCE] transition text-lg"
+              title="Ordner aktualisieren"
+              className="px-3.5 rounded-xl border border-gray-200 bg-white text-gray-400 hover:text-[#38B7CA] hover:border-[#38B7CA] text-lg"
             >
               {foldersLoading ? "…" : "↻"}
             </button>
@@ -156,24 +153,24 @@ export default function BautagebuchForm({
       </div>
 
       {/* Arbeitsschritt */}
-      <div>
-        <label className="block text-sm font-medium text-[#163E73] mb-1.5">Arbeitsschritt</label>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <SectionLabel>Arbeitsschritt</SectionLabel>
         <select
-          className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#3BBBCE]"
+          className={inputCls}
           value={arbeitsschritt}
           onChange={(e) => setArbeitsschritt(e.target.value)}
         >
-          <option value="">– Schritt wählen –</option>
+          <option value="">– Bitte wählen –</option>
           {ARBEITSSCHRITTE.map((s) => <option key={s}>{s}</option>)}
         </select>
       </div>
 
       {/* Bemerkung */}
-      <div>
-        <label className="block text-sm font-medium text-[#163E73] mb-1.5">Bemerkung</label>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <SectionLabel>Bemerkung</SectionLabel>
         <textarea
           rows={3}
-          className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-[#3BBBCE]"
+          className={`${inputCls} resize-none`}
           placeholder="Besonderheiten, Probleme, Hinweise…"
           value={bemerkung}
           onChange={(e) => setBemerkung(e.target.value)}
@@ -181,74 +178,86 @@ export default function BautagebuchForm({
       </div>
 
       {/* Materialliste */}
-      <div>
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
         <div className="flex items-center justify-between mb-2">
-          <label className="text-sm font-medium text-[#163E73]">
+          <SectionLabel>
             Materialliste
             {material.length > 0 && (
-              <span className="ml-2 px-2 py-0.5 bg-[#163E73] text-white rounded-full text-xs">
+              <span className="ml-2 inline-flex items-center justify-center w-5 h-5 rounded-full text-white text-xs font-bold"
+                style={{ background: "#38B7CA" }}>
                 {material.length}
               </span>
             )}
-          </label>
+          </SectionLabel>
         </div>
         <MaterialSelector value={material} onChange={setMaterial} />
       </div>
 
-      {/* Bilder */}
-      <div>
-        <label className="block text-sm font-medium text-[#163E73] mb-2">Fotos</label>
-        <input
-          ref={fileRef}
-          type="file"
-          multiple
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => setImages((p) => [...p, ...Array.from(e.target.files || [])])}
-        />
+      {/* Fotos */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+        <SectionLabel>Fotos</SectionLabel>
+        <input ref={fileRef} type="file" multiple accept="image/*" capture="environment" className="hidden"
+          onChange={(e) => setImages((p) => [...p, ...Array.from(e.target.files || [])])} />
         <button
           type="button"
           onClick={() => fileRef.current?.click()}
-          className="px-4 py-2 bg-[#3BBBCE] hover:bg-[#2faabb] text-white rounded-xl text-sm font-medium transition"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white"
+          style={{ background: "linear-gradient(135deg, #1E75B8, #38B7CA)" }}
         >
-          📷 Fotos hinzufügen
+          <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          Fotos hinzufügen
         </button>
         {previews.length > 0 && (
-          <div className="mt-3 flex flex-wrap gap-2">
+          <div className="mt-4 grid grid-cols-4 sm:grid-cols-6 gap-2">
             {previews.map((url, i) => (
-              <div key={i} className="relative">
+              <div key={i} className="relative group aspect-square">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={url} alt="" className="w-20 h-20 object-cover rounded-xl border border-gray-200" />
+                <img src={url} alt="" className="w-full h-full object-cover rounded-xl border border-gray-100" />
                 <button
                   type="button"
                   onClick={() => setImages((p) => p.filter((_, j) => j !== i))}
-                  className="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white text-xs flex items-center justify-center"
-                >
-                  ×
-                </button>
+                  className="absolute inset-0 flex items-center justify-center rounded-xl bg-black/50 opacity-0 group-hover:opacity-100 transition text-white text-xl"
+                >×</button>
               </div>
             ))}
           </div>
         )}
       </div>
 
-      {/* PDF-Hinweis */}
-      <div className="flex items-center gap-2 text-xs text-gray-400 bg-gray-50 rounded-xl px-4 py-2.5">
-        <svg className="w-4 h-4 text-[#3BBBCE] flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-            d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-        </svg>
-        Alle Angaben und Fotos werden automatisch als PDF zusammengefasst und in Nextcloud gespeichert.
+      {/* PDF info */}
+      <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl text-sm"
+        style={{ background: "linear-gradient(135deg, #E8F4F8, #EEF6FA)", border: "1px solid #C8E6F0" }}>
+        <div className="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+          style={{ background: "linear-gradient(135deg, #1E75B8, #38B7CA)" }}>
+          <svg className="w-4 h-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <p style={{ color: "#113462" }}>
+          Alle Angaben und Fotos werden automatisch als <strong>PDF</strong> zusammengefasst und in Nextcloud gespeichert. Die Materialdaten werden in der Datenbank für die Auswertung gesichert.
+        </p>
       </div>
 
       {/* Status */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-xl px-4 py-3">{error}</div>
+        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm rounded-2xl px-5 py-4">
+          <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+          </svg>
+          {error}
+        </div>
       )}
       {success && (
-        <div className="bg-green-50 border border-green-200 text-green-700 text-sm rounded-xl px-4 py-3">
-          ✅ {success}
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 text-green-700 text-sm rounded-2xl px-5 py-4">
+          <svg className="w-4 h-4 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          {success}
         </div>
       )}
 
@@ -256,7 +265,8 @@ export default function BautagebuchForm({
       <button
         onClick={save}
         disabled={saving}
-        className="w-full py-3.5 bg-[#163E73] hover:bg-[#1a4d8f] text-white font-semibold rounded-xl text-sm transition disabled:opacity-60 flex items-center justify-center gap-2"
+        className="w-full py-4 rounded-2xl text-white font-bold text-sm disabled:opacity-60 flex items-center justify-center gap-2 shadow-lg"
+        style={{ background: saving ? "#38B7CA" : "linear-gradient(135deg, #113462 0%, #1E75B8 60%, #38B7CA 100%)" }}
       >
         {saving ? (
           <>
@@ -267,7 +277,12 @@ export default function BautagebuchForm({
             PDF wird erstellt & hochgeladen…
           </>
         ) : (
-          "💾 Speichern & PDF nach Nextcloud hochladen"
+          <>
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            Speichern & in Nextcloud hochladen
+          </>
         )}
       </button>
     </div>
