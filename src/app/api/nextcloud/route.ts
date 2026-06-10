@@ -89,7 +89,9 @@ export async function POST(request: Request) {
       if (action === "test") {
         try {
           await propfind(userUrl, username, password, "0");
-          return NextResponse.json({ ok: true, isAdmin: ADMIN_USERS.includes(username) });
+          const isAdmin = ADMIN_USERS.includes(username) ||
+            !!(await prisma.adminUser.findUnique({ where: { username } }));
+          return NextResponse.json({ ok: true, isAdmin });
         } catch (err: unknown) {
           const e = err as Error & { status?: number };
           return NextResponse.json({ error: "Login fehlgeschlagen" }, { status: e.status || 401 });
@@ -139,8 +141,13 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Fehlende Parameter" }, { status: 400 });
 
       const folderBase = resolveFolderBase(folderHref);
-      const ts = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
-      const entryFolder = `${folderBase}/Bautagebuch_${ts}`;
+      const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+      const kuerzel = username
+        .split(/[\s._-]+/)
+        .filter(Boolean)
+        .map((w: string) => w.charAt(0).toUpperCase())
+        .join("");
+      const entryFolder = `${folderBase}/Bautagebuch_${today}_${kuerzel}`;
       await ensureFolder(entryFolder, username, password);
 
       // Save entry to database

@@ -29,3 +29,11 @@ model Material {
   einheit      String
   menge        Float
 }
+
+model AdminUser {
+  id          String   @id @default(cuid())
+  username    String   @unique
+  anzeigeName String?
+  hinzugefugt DateTime @default(now())
+  hinzugefugtVon String?
+}
